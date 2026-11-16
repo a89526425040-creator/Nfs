@@ -205,7 +205,8 @@ def parse_vif_stream(payload: bytes) -> dict:
 
 
 def probe_catalogue(catalogue: Path, archives: dict[int, Path],
-                    vehicle_limit: int = 3, meshes_per_vehicle: int = 3):
+                    vehicle_limit: int = 3, meshes_per_vehicle: int = 3,
+                    raw_dir: Path | None = None):
     resources = []
     seen = set()
     with catalogue.open("r", newline="", encoding="utf-8-sig") as stream:
@@ -236,7 +237,7 @@ def probe_catalogue(catalogue: Path, archives: dict[int, Path],
                 if node["id"] == TARGET_LEAF
             ][:meshes_per_vehicle]
             leaf_rows = []
-            for node in leaves:
+            for stream_index, node in enumerate(leaves):
                 start = node["offset"] + 8
                 raw = data[start:start + node["size"]]
                 if len(raw) != node["size"]:
@@ -244,11 +245,19 @@ def probe_catalogue(catalogue: Path, archives: dict[int, Path],
                 leading = 0
                 while leading < len(raw) and raw[leading] == PADDING_BYTE:
                     leading += 1
-                parsed = parse_vif_stream(raw[leading:])
+                stream_data = raw[leading:]
+                parsed = parse_vif_stream(stream_data)
+                raw_file = None
+                if raw_dir is not None:
+                    raw_dir.mkdir(parents=True, exist_ok=True)
+                    safe_name = path.upper().replace("\\", "_").replace("/", "_")
+                    raw_file = f"{safe_name}_{stream_index:02d}.vif"
+                    (raw_dir / raw_file).write_bytes(stream_data)
                 leaf_rows.append({
                     "chunk_offset": node["offset"],
                     "payload_size": node["size"],
                     "leading_padding_bytes": leading,
+                    "raw_file": raw_file,
                     **parsed,
                 })
             resources.append({
@@ -270,6 +279,7 @@ def main():
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--vehicles", type=int, default=3)
     parser.add_argument("--meshes", type=int, default=3)
+    parser.add_argument("--raw-dir", type=Path)
     args = parser.parse_args()
     archives = {}
     for spec in args.archive:
@@ -279,7 +289,7 @@ def main():
         archives[int(key)] = Path(value)
     try:
         resources = probe_catalogue(
-            args.catalogue, archives, args.vehicles, args.meshes
+            args.catalogue, archives, args.vehicles, args.meshes, args.raw_dir
         )
     except (OSError, ValueError) as exc:
         parser.error(str(exc))

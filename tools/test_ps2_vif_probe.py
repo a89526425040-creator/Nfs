@@ -1,6 +1,6 @@
 import unittest
 
-from ps2_vif_probe import parse_vif_stream
+from ps2_vif_probe import decode_unpack_values, parse_vif_stream
 
 
 class Ps2VifProbeTests(unittest.TestCase):
@@ -32,6 +32,28 @@ class Ps2VifProbeTests(unittest.TestCase):
         self.assertEqual(result["command_count"], 2)
         self.assertEqual(result["unpack_data_bytes"], 20)
         self.assertEqual(result["command_counts"], {"NOP": 1, "UNPACK_3x16": 1})
+
+    def test_decodes_tightly_packed_signed_and_unsigned_scalars(self):
+        self.assertEqual(
+            decode_unpack_values(bytes.fromhex("FFFF0000"), 2, 16, False),
+            [-1, 0],
+        )
+        self.assertEqual(
+            decode_unpack_values(bytes.fromhex("FF7F"), 2, 8, True),
+            [255, 127],
+        )
+
+    def test_unpack_records_include_vu_address_and_samples(self):
+        data = (
+            bytes.fromhex("01C0016C")
+            + bytes.fromhex("0000803F000000400000404000008040")
+        )
+        result = parse_vif_stream(data)
+        record = result["unpack_records"][0]
+        self.assertEqual(record["format"], "UNPACK_4x32")
+        self.assertEqual(record["vu_address"], 1)
+        self.assertTrue(record["unsigned"])
+        self.assertEqual(record["sample_f32"], [1.0, 2.0, 3.0, 4.0])
 
     def test_preserves_0x11_inside_vif_command_immediate(self):
         data = bytes.fromhex("11800361") + bytes(8) + bytes(4)

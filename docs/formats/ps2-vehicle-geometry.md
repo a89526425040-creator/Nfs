@@ -107,3 +107,8 @@ This remains a format identification, not yet a complete vertex interpretation. 
 The first RX7 sample also contains `0x6903800B` (UNPACK V3-16, NUM=3) at stream offset `0x80`, followed by the next valid command `0x6D04801D` at `0x98`. The V3-16 input is 3 components × 16 bits × 3 vectors = 144 bits = 18 bytes; the stream rounds the complete payload to the next 32-bit boundary (20 bytes). It does **not** pad each vector independently to 8 bytes. Treating it as 24 bytes consumed the next command as data and produced a false opcode `0x0F`.
 
 The VIF probe now computes the total bit count for the entire UNPACK batch, then rounds once to a 32-bit boundary. This is tested explicitly with a three-vector V3-16 case. Other formats still require confirmation against the full retail streams. The reference describes the command fields and the packed input layouts: [PS2Tek VIF commands](https://israpps.github.io/ps2tek/#vif-commands) and [VIF UNPACK formats](https://israpps.github.io/ps2tek/#vif-unpack).
+
+
+### In-stream 0x11 is not a padding marker
+
+A later sample contains the aligned command word `0x61038011` (UNPACK S-16, NUM=3, IMMEDIATE=`0x8011`). Its least-significant byte is `0x11`. A byte-wise scan that removes every `0x11` value corrupts the command word and shifts all following parsing by one byte. The probe therefore strips only the known leading resource fill before entering the VIF stream; it preserves all bytes inside the command stream and only accepts a terminal fill run after the last complete command.

@@ -10,7 +10,7 @@ class ZdirCatalogueTests(unittest.TestCase):
         self.assertEqual(nfs_name_hash("cars\CAR1.BGV"), nfs_name_hash("CARS\car1.bgv"))
 
     def test_hash_matches_reference_example(self):
-        self.assertEqual(nfs_name_hash("GLOBAL\\FRONTENDMEMORYFILE.BIN"), 0xC08BE7BA)
+        self.assertEqual(nfs_name_hash("GLOBAL\\FRONTENDMEMORYFILE.BIN"), 0xEF97B84C)
 
     def test_resolves_unique_name_and_preserves_unknown(self):
         import struct

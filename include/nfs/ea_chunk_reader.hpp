@@ -6,6 +6,7 @@
 #include <span>
 #include <string>
 #include <vector>
+#include <utility>
 
 namespace nfs::formats {
 

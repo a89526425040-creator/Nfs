@@ -93,7 +93,8 @@ def parse_dvp_overlays(elf: bytes) -> dict:
         entry = {
             "name": name, "program_id": program_id, "line": int(line), "chunk": int(chunk),
             "ee_address": ee_addr, "vu_address": vu_addr, "section_type": section_type,
-            "file_backed": file_backed, "allocated_bytes": section["size"],
+            "file_backed": file_backed, "zero_filled": not any(raw),
+            "allocated_bytes": section["size"],
             "bytes": len(raw), "sha256": hashlib.sha256(raw).hexdigest(), "data": raw,
         }
         entries.append({k: v for k, v in entry.items() if k != "data"})
@@ -115,6 +116,7 @@ def parse_dvp_overlays(elf: bytes) -> dict:
             "chunk_count": len(chunks),
             "allocated_bytes": sum(item["allocated_bytes"] for item in chunks),
             "file_backed_bytes": len(combined),
+            "zero_filled": all(item["zero_filled"] for item in chunks),
             "bytes": len(combined),
             "contiguous": contiguous, "chunks": [
                 {k: v for k, v in item.items() if k != "data"} for item in chunks
@@ -156,13 +158,15 @@ def main() -> int:
             f"VU 0x{program['vu_start']:04X}: program {program['program_id']}, "
             f"{program['chunk_count']} chunks, {program['allocated_bytes']} allocated bytes, "
             f"{program['file_backed_bytes']} file-backed bytes, "
+            f"zero_filled={program['zero_filled']}, "
             f"contiguous={program['contiguous']}"
         )
         for chunk in program["chunks"]:
             print(
                 f"  chunk {chunk['chunk']}: EE=0x{chunk['ee_address']:08X}, "
                 f"VU=0x{chunk['vu_address']:04X}, allocated={chunk['allocated_bytes']}, "
-                f"file_backed={chunk['file_backed']}, sh_type={chunk['section_type']}, "
+                f"file_backed={chunk['file_backed']}, zero_filled={chunk['zero_filled']}, "
+                f"sh_type={chunk['section_type']}, "
                 f"name={chunk['name']}"
             )
     return 0

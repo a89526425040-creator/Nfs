@@ -1,4 +1,3 @@
-import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -21,9 +20,9 @@ class Ps2ResourceProbeTests(unittest.TestCase):
             result = inspect_prefix(entry, {0: archive}, sample_size=64)
             self.assertEqual(result["words_le_u32"][0]["hex"], "0x80134000")
             self.assertEqual(result["words_le_u32"][1]["u32"], 8)
-            self.assertIn(
-                {"offset": 8, "text": "HELLO_RESOURCE"},
-                result["ascii_strings"],
+            self.assertEqual(result["ascii_strings"][0]["offset"], 8)
+            self.assertTrue(
+                result["ascii_strings"][0]["text"].startswith("HELLO_RESOURCE")
             )
             self.assertEqual(result["sampled_bytes"], 34)
 

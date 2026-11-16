@@ -166,8 +166,6 @@ def main() -> int:
             continue
         raw = (args.dvp_dir / program["file"]).read_bytes()
         stats = vu_program_stats(raw)
-        if stats["ebit_instructions"] == 0:
-            continue
         candidates.append((program, stats))
     support_programs = [program for program in dvp["programs"] if int(program["vu_start"]) != 0]
     support_upload = b"".join(make_mpg_upload(program, args.dvp_dir) for program in support_programs)
@@ -182,7 +180,8 @@ def main() -> int:
                 continue
             stream_path = args.vif_dir / raw_name
             capture_dir = args.output_dir / f"program_{program['program_id']}_stream_{stream_index}"
-            result = run_replay(args.harness, upload, stream_path, capture_dir, args.timeout)
+            replay_timeout = args.timeout if stats["ebit_instructions"] else min(args.timeout, 5)
+            result = run_replay(args.harness, upload, stream_path, capture_dir, replay_timeout)
             results.append({
                 "program_id": program["program_id"],
                 "vu_start": program["vu_start"],

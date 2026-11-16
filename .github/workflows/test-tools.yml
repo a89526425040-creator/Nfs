@@ -1,0 +1,23 @@
+name: Test NFS research tools
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  python-tools:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Nfs repository
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Run ZDIR parser tests
+        run: python -m unittest discover -s tools -p "test_*.py" -v

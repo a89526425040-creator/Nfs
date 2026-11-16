@@ -76,3 +76,27 @@ The scan also found one `0x80034020` container and five each of `0x00039200`, `0
 - Coordinate handedness, axis order, scale, and triangle winding.
 
 The next probe reads a small bounded prefix from representative geometry leaves and reports decoded numeric candidates and payload-size divisibility. No leaf payload is copied into the repository.
+
+
+## Candidate VIF stream in geometry leaf 0x00134A02
+
+A bounded prefix sample from the first RX7 geometry submesh contains this sequence after eight leading `0x11` bytes:
+
+```text
+0x6E018000
+0x0007020B
+0x6C01C001
+0x00006000 0x3951B717 0x00000000 0x00000000
+0x6802C002
+...
+```
+
+The PS2 VIF command word is encoded as `CMD | NUM | IMMEDIATE` in successive bytes from most significant to least significant. The high command byte therefore identifies these as:
+
+- `0x6E`: UNPACK V4-8
+- `0x6C`: UNPACK V4-32
+- `0x68`: UNPACK V3-32
+
+These command IDs and formats match the PS2 VIF reference documentation. The byte sequence is consequently a strong VIF-stream signature inside `0x00134A02`, not an arbitrary float or index array. See [PS2Tek: VIF command encoding and UNPACK formats](https://israpps.github.io/ps2tek/#vif-commands) and [PS2SDK VIF codes](https://ps2dev.github.io/ps2sdk/vif__codes_8h.html).
+
+This remains a format identification, not yet a complete vertex interpretation. The VIF stream may unpack data into VU memory using different vector widths and signedness, and the game’s VU microprogram may perform additional transforms before the data becomes renderable geometry. The next step is to parse the complete command stream, validate every payload boundary, and inventory UNPACK formats and counts across representative submeshes. Only then should fields be named as positions, normals, UVs, colors, or indices.

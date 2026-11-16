@@ -148,6 +148,12 @@ def main() -> int:
             f"{program['chunk_count']} chunks, {program['bytes']} bytes, "
             f"contiguous={program['contiguous']}"
         )
+        for chunk in program["chunks"]:
+            print(
+                f"  chunk {chunk['chunk']}: EE=0x{chunk['ee_address']:08X}, "
+                f"VU=0x{chunk['vu_address']:04X}, bytes={chunk['bytes']}, "
+                f"name={chunk['name']}"
+            )
     return 0
 
 

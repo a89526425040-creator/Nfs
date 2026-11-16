@@ -87,7 +87,7 @@ def parse_vif_stream(payload: bytes) -> dict:
         elif opcode == 0x4A:  # MPG: NUM 64-bit microinstructions
             data_bytes, label = effective_num * 8, "MPG"
         elif opcode in (0x50, 0x51):  # DIRECT / DIRECTHL: QWC in immediate
-            data_bytes = immediate * 16
+            data_bytes = (immediate or 65536) * 16
             label = "DIRECT" if opcode == 0x50 else "DIRECTHL"
         elif opcode in {
             0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,

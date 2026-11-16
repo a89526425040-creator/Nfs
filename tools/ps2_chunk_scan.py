@@ -99,7 +99,7 @@ def flatten(nodes):
         yield from flatten(node["children"])
 
 
-def scan_catalogue(catalogue: Path, archives: dict[int, Path], limit: int = 8):
+def scan_catalogue(catalogue: Path, archives: dict[int, Path], limit: int = 8, min_size: int = 1_000_000):
     if limit < 1:
         raise ValueError("limit must be positive")
     selected, seen = [], set()
@@ -115,10 +115,12 @@ def scan_catalogue(catalogue: Path, archives: dict[int, Path], limit: int = 8):
             ):
                 continue
             seen.add(path.upper())
+            offset, size = int(entry["byte_offset"]), int(entry["size"])
+            if size < min_size:
+                continue
             archive_id = int(entry["archive_id"])
             if archive_id not in archives:
                 raise ValueError(f"archive {archive_id} was not supplied")
-            offset, size = int(entry["byte_offset"]), int(entry["size"])
             with archives[archive_id].open("rb") as archive:
                 archive.seek(offset)
                 payload = archive.read(size)
@@ -154,6 +156,7 @@ def main():
     parser.add_argument("--archive", action="append", required=True, metavar="ID=PATH")
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--limit", type=int, default=8)
+    parser.add_argument("--min-size", type=int, default=1_000_000)
     args = parser.parse_args()
     archives = {}
     for spec in args.archive:
@@ -162,7 +165,7 @@ def main():
             parser.error(f"invalid archive mapping: {spec}")
         archives[int(key)] = Path(value)
     try:
-        resources = scan_catalogue(args.catalogue, archives, args.limit)
+        resources = scan_catalogue(args.catalogue, archives, args.limit, args.min_size)
     except (OSError, ValueError) as exc:
         parser.error(str(exc))
     args.output.parent.mkdir(parents=True, exist_ok=True)

@@ -39,7 +39,7 @@ def chunks(data: bytes, start: int, end: int):
 
 
 def _cstring(raw: bytes) -> str:
-    return raw.split(b"\\0", 1)[0].decode("ascii", "replace")
+    return raw.split(b"\0", 1)[0].decode("ascii", "replace")
 
 
 def parse_tpk(data: bytes) -> dict:
@@ -216,7 +216,7 @@ def main() -> int:
     except (OSError, ValueError) as exc:
         parser.error(str(exc))
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(json.dumps({"resources": resources}, indent=2) + "\\n", encoding="utf-8")
+    args.output.write_text(json.dumps({"resources": resources}, indent=2) + "\n", encoding="utf-8")
     print(f"Parsed {sum(1 for item in resources if item.get('header'))} TPK texture packs; inspected {len(resources)} resources.")
     return 0
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Replay PS2 VIF geometry streams through the PS2Kit VIF1/VU1 interpreter."""
+"""Replay PS2 VIF geometry through the VU1 program extracted from .vutext."""
 from __future__ import annotations
 
 import argparse
@@ -20,7 +20,11 @@ def vu_program_stats(raw: bytes) -> dict:
         special = (lower & 3) | ((lower >> 4) & 0x7C)
         if (lower >> 25) == 0x40 and special == 0x6C:
             xgkick += 1
-    return {"instruction_pairs": len(raw) // 8, "ebit_instructions": ebit, "xgkick_instructions": xgkick}
+    return {
+        "instruction_pairs": len(raw) // 8,
+        "ebit_instructions": ebit,
+        "xgkick_instructions": xgkick,
+    }
 
 
 def make_mpg_upload(program: dict, binary_dir: Path) -> bytes:
@@ -50,6 +54,54 @@ def make_mpg_upload(program: dict, binary_dir: Path) -> bytes:
     return bytes(commands)
 
 
+def make_vutext_program(meta: dict, binary_dir: Path) -> dict:
+    raw = (binary_dir / meta["file"]).read_bytes()
+    if len(raw) != int(meta["bytes"]):
+        raise ValueError(f".vutext program {meta['index']} binary size mismatch")
+    start = int(meta["vu"])
+    chunks = []
+    cursor = 0
+    while cursor < len(raw):
+        size = min(2048, len(raw) - cursor)
+        chunks.append({"bytes": size, "vu_address": start + cursor})
+        cursor += size
+    return {
+        "program_id": f"vutext_{meta['index']}",
+        "vu_start": start,
+        "file": meta["file"],
+        "bytes": len(raw),
+        "chunks": chunks,
+    }
+
+
+def build_vif_state(base: int, offset: int) -> bytes:
+    # STCYCL(1,1), STMOD(0), BASE, OFFSET, ITOP.
+    words = (
+        0x01000101,
+        0x05000000,
+        0x03000000 | (base & 0x3FF),
+        0x02000000 | (offset & 0x3FF),
+        0x04000000 | (base & 0x3FF),
+    )
+    return struct.pack("<" + "I" * len(words), *words)
+
+
+def rewrite_mscal(stream_data: bytes, stream_meta: dict, immediate: int) -> tuple[bytes, int]:
+    raw = bytearray(stream_data)
+    changed = 0
+    for command in stream_meta.get("commands", []):
+        if command.get("label") != "MSCAL":
+            continue
+        offset = int(command["offset"])
+        if offset < 0 or offset + 4 > len(raw):
+            raise ValueError(f"MSCAL command offset outside stream: {offset}")
+        word = struct.unpack_from("<I", raw, offset)[0]
+        word = (word & 0xFFFF0000) | (immediate & 0xFFFF)
+        struct.pack_into("<I", raw, offset, word)
+        changed += 1
+    return bytes(raw), changed
+
+
 def parse_gif_capture(capture_dir: Path) -> dict:
     packet_path = capture_dir / "gif-packets.bin"
     segment_path = capture_dir / "gif-segments.tsv"
@@ -59,7 +111,11 @@ def parse_gif_capture(capture_dir: Path) -> dict:
         for line in segment_path.read_text(encoding="utf-8").splitlines():
             fields = line.split("\t")
             if len(fields) == 3:
-                segments.append({"path": int(fields[0]), "qwc": int(fields[1]), "offset": int(fields[2])})
+                segments.append({
+                    "path": int(fields[0]),
+                    "qwc": int(fields[1]),
+                    "offset": int(fields[2]),
+                })
     path1_qwc = sum(s["qwc"] for s in segments if s["path"] == 1)
     path2_qwc = sum(s["qwc"] for s in segments if s["path"] == 2)
     tags = eop_packets = malformed = 0
@@ -108,17 +164,24 @@ def parse_gif_capture(capture_dir: Path) -> dict:
     }
 
 
-def run_replay(harness: Path, upload: bytes, stream_path: Path, output_dir: Path, timeout: int) -> dict:
+def run_replay(
+    harness: Path,
+    prefix: bytes,
+    stream_data: bytes,
+    output_dir: Path,
+    timeout: int,
+) -> dict:
     output_dir.mkdir(parents=True, exist_ok=True)
     input_path = output_dir / "input.vif"
-    input_path.write_bytes(upload + stream_path.read_bytes())
+    input_path.write_bytes(prefix + stream_data)
     try:
         result = subprocess.run(
             [str(harness), str(input_path), str(output_dir)],
             capture_output=True, text=True, timeout=timeout, check=False,
         )
         (output_dir / "runner.log").write_text(
-            result.stdout + "\n--- STDERR ---\n" + result.stderr, encoding="utf-8"
+            result.stdout + "\n--- STDERR ---\n" + result.stderr,
+            encoding="utf-8",
         )
         capture = parse_gif_capture(output_dir)
         return {
@@ -126,29 +189,41 @@ def run_replay(harness: Path, upload: bytes, stream_path: Path, output_dir: Path
             "stdout": result.stdout[-4000:],
             "stderr": result.stderr[-2000:],
             **capture,
-            "vu_dump_files": sorted(p.name for p in output_dir.glob("*.bin") if p.name.startswith(("micro_", "mem_"))),
+            "vu_dump_files": sorted(
+                p.name for p in output_dir.glob("*.bin")
+                if p.name.startswith(("micro_", "mem_"))
+            ),
             "has_register_dump": any(output_dir.glob("regs_*.txt")),
         }
     except subprocess.TimeoutExpired as exc:
         (output_dir / "runner.log").write_text(
-            f"Timed out after {timeout} seconds\n{exc}", encoding="utf-8"
+            f"Timed out after {timeout} seconds\n{exc}",
+            encoding="utf-8",
         )
-        return {"timeout": True, "gif_bytes": 0, "gif_tag_count": 0, "gif_parse_errors": 0}
+        return {
+            "timeout": True,
+            "gif_bytes": 0,
+            "gif_tag_count": 0,
+            "gif_parse_errors": 0,
+        }
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--dvp-json", type=Path, required=True)
-    parser.add_argument("--dvp-dir", type=Path, required=True)
+    parser.add_argument("--vutext-json", type=Path, required=True)
+    parser.add_argument("--vutext-dir", type=Path, required=True)
     parser.add_argument("--vif-json", type=Path, required=True)
     parser.add_argument("--vif-dir", type=Path, required=True)
     parser.add_argument("--harness", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--vehicle", default="CARS\\RX7\\GEOMETRY.BIN")
+    parser.add_argument("--mscal-override", type=lambda value: int(value, 0), default=0x100)
+    parser.add_argument("--base", type=int, default=638)
+    parser.add_argument("--offsets", default="0,256,320,512")
     parser.add_argument("--timeout", type=int, default=15)
     args = parser.parse_args()
 
-    dvp = json.loads(args.dvp_json.read_text(encoding="utf-8"))
+    vutext = json.loads(args.vutext_json.read_text(encoding="utf-8"))
     vif = json.loads(args.vif_json.read_text(encoding="utf-8"))
     resource = next(
         (item for item in vif["resources"] if item["path"].upper() == args.vehicle.upper()),
@@ -160,62 +235,85 @@ def main() -> int:
     if not streams:
         parser.error(f"no VIF streams found in {args.vehicle}")
 
-    candidates = []
-    for program in dvp["programs"]:
-        if int(program["vu_start"]) != 0:
-            continue
-        raw = (args.dvp_dir / program["file"]).read_bytes()
-        stats = vu_program_stats(raw)
-        candidates.append((program, stats))
-    support_programs = [program for program in dvp["programs"] if int(program["vu_start"]) != 0]
-    support_upload = b"".join(make_mpg_upload(program, args.dvp_dir) for program in support_programs)
+    programs = [
+        make_vutext_program(meta, args.vutext_dir)
+        for meta in vutext["programs"]
+    ]
+    if not programs:
+        parser.error("no raw .vutext MPG program blocks were exported")
+    offsets = [int(value.strip(), 0) for value in args.offsets.split(",") if value.strip()]
     args.output_dir.mkdir(parents=True, exist_ok=True)
 
     results = []
-    for program, stats in candidates:
-        # The geometry leaf inherits VIF state from earlier game DMA packets.
-        # Recreate the normal CL=1/WL=1 cycle and STMOD=0 before replay.
-        vif_state = struct.pack("<II", 0x01000101, 0x05000000)
-        upload = vif_state + support_upload + make_mpg_upload(program, args.dvp_dir)
-        for stream_index, stream in enumerate(streams):
-            raw_name = stream.get("raw_file")
-            if not raw_name:
-                continue
-            stream_path = args.vif_dir / raw_name
-            capture_dir = args.output_dir / f"program_{program['program_id']}_stream_{stream_index}"
-            replay_timeout = args.timeout if stats["ebit_instructions"] else min(args.timeout, 5)
-            result = run_replay(args.harness, upload, stream_path, capture_dir, replay_timeout)
-            results.append({
-                "program_id": program["program_id"],
-                "vu_start": program["vu_start"],
-                "program_bytes": program["bytes"],
-                "chunk_count": program["chunk_count"],
-                "stream_index": stream_index,
-                "stream_offset": stream["chunk_offset"],
-                "stream_bytes": stream["stream_bytes"],
-                **stats,
-                **result,
-            })
+    for program in programs:
+        raw_code = (args.vutext_dir / program["file"]).read_bytes()
+        stats = vu_program_stats(raw_code)
+        upload = make_mpg_upload(program, args.vutext_dir)
+        for offset in offsets:
+            prefix = build_vif_state(args.base, offset) + upload
+            for stream_index, stream in enumerate(streams):
+                raw_name = stream.get("raw_file")
+                if not raw_name:
+                    continue
+                stream_path = args.vif_dir / raw_name
+                stream_data, rewritten = rewrite_mscal(
+                    stream_path.read_bytes(), stream, args.mscal_override
+                )
+                capture_dir = args.output_dir / (
+                    f"{program['program_id']}_base_{args.base}_offset_{offset}_stream_{stream_index}"
+                )
+                result = run_replay(
+                    args.harness, prefix, stream_data, capture_dir, args.timeout
+                )
+                results.append({
+                    "program_id": program["program_id"],
+                    "vu_start": program["vu_start"],
+                    "program_bytes": program["bytes"],
+                    "stream_index": stream_index,
+                    "stream_offset": stream["chunk_offset"],
+                    "stream_bytes": stream["stream_bytes"],
+                    "instruction_pairs": stats["instruction_pairs"],
+                    "ebit_instructions": stats["ebit_instructions"],
+                    "xgkick_instructions": stats["xgkick_instructions"],
+                    "mscal_override": args.mscal_override,
+                    "mscals_rewritten": rewritten,
+                    "base": args.base,
+                    "offset": offset,
+                    **result,
+                })
 
     report = {
         "vehicle": resource["path"],
-        "candidate_programs": len(candidates),
-        "support_programs_loaded": [
-            {"program_id": program["program_id"], "vu_start": program["vu_start"], "bytes": program["bytes"]}
-            for program in support_programs
+        "programs_loaded": [
+            {
+                "program_id": p["program_id"],
+                "vu_start": p["vu_start"],
+                "bytes": p["bytes"],
+            }
+            for p in programs
         ],
+        "mscal_override": args.mscal_override,
+        "base": args.base,
+        "offsets_tested": offsets,
         "streams": len(streams),
         "replays": results,
     }
     (args.output_dir / "vu-replay-report.json").write_text(
-        json.dumps(report, indent=2) + "\n", encoding="utf-8"
+        json.dumps(report, indent=2) + "\n",
+        encoding="utf-8",
     )
-    print(f"Replayed {len(results)} DVP-program / VIF-stream combinations.")
+    print(
+        f"Replayed {len(results)} .vutext-program / VIF-stream / TOPS-offset combinations."
+    )
     for item in results:
         print(
-            f"program {item['program_id']} stream {item['stream_index']}: "
-            f"GIF {item.get('gif_bytes', 0)} bytes, {item.get('gif_tag_count', 0)} tags, "
-            f"{item.get('gif_eop_packets', 0)} EOP packets, timeout={item.get('timeout', False)}"
+            f"{item['program_id']} stream {item['stream_index']} "
+            f"BASE={item['base']} OFFSET={item['offset']}: "
+            f"GIF {item.get('gif_bytes', 0)} bytes, "
+            f"{item.get('gif_tag_count', 0)} tags, "
+            f"{item.get('gif_eop_packets', 0)} EOP packets, "
+            f"MSCALs={item['mscals_rewritten']}, "
+            f"return={item.get('return_code', 'timeout')}"
         )
     return 0
 

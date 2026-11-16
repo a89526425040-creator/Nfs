@@ -25,8 +25,11 @@ def unpack_payload_bytes(command: int, count: int) -> tuple[int, int, int]:
         bits_per_component = 32 >> (fmt & 0x03)
     components = ((fmt >> 2) & 0x03) + 1
     bits_per_vector = components * bits_per_component
-    bytes_per_vector = ((bits_per_vector + 31) // 32) * 4
-    return bytes_per_vector * count, components, bits_per_component
+    # VIF packs successive vector components continuously, then rounds the
+    # complete UNPACK payload to a 32-bit word boundary (not each vector).
+    total_bits = bits_per_vector * count
+    data_bytes = ((total_bits + 31) // 32) * 4
+    return data_bytes, components, bits_per_component
 
 
 def parse_vif_stream(payload: bytes) -> dict:

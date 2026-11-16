@@ -61,9 +61,15 @@ def parse_dvp_overlays(elf: bytes) -> dict:
     errors = []
     for pos in range(0, len(tab_data), 12):
         name_off, ee_addr, vu_addr = struct.unpack_from("<III", tab_data, pos)
-        name = _cstring(str_data, name_off)
+        try:
+            name = _cstring(str_data, name_off)
+        except ValueError:
+            name = ""
         if not name.startswith(".DVP.overlay."):
-            alternate = _cstring(shstr_data, name_off)
+            try:
+                alternate = _cstring(shstr_data, name_off)
+            except ValueError:
+                alternate = ""
             if alternate.startswith(".DVP.overlay."):
                 name = alternate
         section = by_name.get(name)

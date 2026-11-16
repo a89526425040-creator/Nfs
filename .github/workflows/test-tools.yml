@@ -37,5 +37,29 @@ jobs:
           test -x "$RUNNER_TEMP/ps2-vu-replay"
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
-      - name: Check PS2 TPK exporter
-        run: cargo check --manifest-path tools/ps2-tpk-exporter/Cargo.toml
+      - name: Check PS2 TPK exporter with PS2 header layout
+        run: |
+          git init "$RUNNER_TEMP/PryHUB"
+          git -C "$RUNNER_TEMP/PryHUB" remote add origin https://github.com/bdrtr/PryHUB.git
+          git -C "$RUNNER_TEMP/PryHUB" fetch --depth 1 origin 861753d58ef065bc0944ca3241dad8a0dea7bfde
+          git -C "$RUNNER_TEMP/PryHUB" checkout FETCH_HEAD
+          python - "$RUNNER_TEMP/PryHUB/crates/gizmo-nfs/src/texture/decode.rs" <<'PY'
+          import pathlib, sys
+          path = pathlib.Path(sys.argv[1])
+          source = path.read_text(encoding="utf-8")
+          old = "const HEADER_INTO: usize = 0x64 + 0x24;"
+          if old not in source:
+              raise SystemExit("upstream texture header constant changed")
+          path.write_text(source.replace(old, "const HEADER_INTO: usize = 0x54;", 1), encoding="utf-8")
+          PY
+          mkdir -p "$RUNNER_TEMP/tpk-exporter/src"
+          cp tools/ps2-tpk-exporter/src/main.rs "$RUNNER_TEMP/tpk-exporter/src/main.rs"
+          cat > "$RUNNER_TEMP/tpk-exporter/Cargo.toml" <<EOF
+          [package]
+          name = "ps2-tpk-exporter"
+          version = "0.1.0"
+          edition = "2021"
+          [dependencies]
+          gizmo-nfs = { path = "$RUNNER_TEMP/PryHUB/crates/gizmo-nfs", features = ["png"] }
+          EOF
+          CARGO_TARGET_DIR="$RUNNER_TEMP/cargo-target" cargo check --manifest-path "$RUNNER_TEMP/tpk-exporter/Cargo.toml"

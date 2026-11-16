@@ -5,9 +5,9 @@ from ps2_dvp_overlay_probe import parse_dvp_overlays
 
 
 def make_elf(table_payload=None):
-    overlay_name = b".DVP.overlay..0x0.12345.44.0\\0"
+    overlay_name = b".DVP.overlay..0x0.12345.44.0\0"
     section_names = (
-        b"\\0.shstrtab\\0.DVP.ovlytab\\0.DVP.ovlystrtab\\0"
+        b"\0.shstrtab\0.DVP.ovlytab\0.DVP.ovlystrtab\0"
         + overlay_name
     )
     name_off = section_names.index(overlay_name)

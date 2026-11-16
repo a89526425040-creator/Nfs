@@ -42,17 +42,8 @@ def parse_vif_stream(payload: bytes) -> dict:
     padding_bytes = 0
 
     while pos < len(payload):
-        # The resource has a leading 0x11 fill run before the VIF stream.
-        # Inside the stream, 0x11 is valid command/immediate/data content and
-        # must never be stripped byte-by-byte.
-        if pos == 0 and payload[pos] == PADDING_BYTE:
-            end = pos
-            while end < len(payload) and payload[end] == PADDING_BYTE:
-                end += 1
-            padding_bytes += end - pos
-            pos = end
-            continue
-
+        # Leading resource fill is removed by probe_catalogue before this call.
+        # Inside the stream, 0x11 is valid command/immediate/data content.
         if len(payload) - pos < 4:
             tail = payload[pos:]
             if all(byte in (0, PADDING_BYTE) for byte in tail):

@@ -57,7 +57,7 @@ def parse_dvp_overlays(elf: bytes) -> dict:
         name_off, ee_addr, vu_addr = struct.unpack_from("<III", tab_data, pos)
         name = _cstring(str_data, name_off)
         section = by_name.get(name)
-        match = re.fullmatch(r"\\.DVP\\.overlay\\.\\.(?:0x[0-9a-fA-F]+|unknvma)\\.(\\d+)\\.(\\d+)\\.(\\d+)", name)
+        match = re.fullmatch(r"\.DVP\.overlay\.\.(?:0x[0-9a-fA-F]+|unknvma)\.(\d+)\.(\d+)\.(\d+)", name)
         if section is None:
             errors.append(f"table entry {pos // 12}: section {name!r} not found")
             continue

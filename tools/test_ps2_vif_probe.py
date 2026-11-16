@@ -23,6 +23,10 @@ class Ps2VifProbeTests(unittest.TestCase):
             "0x8": 1, "0xC": 1, "0xE": 1
         })
 
+    def test_rejects_zero_direct_count_when_payload_is_absent(self):
+        with self.assertRaisesRegex(ValueError, "needs 1048576 data bytes"):
+            parse_vif_stream(bytes.fromhex("00000050"))
+
 
 if __name__ == "__main__":
     unittest.main()

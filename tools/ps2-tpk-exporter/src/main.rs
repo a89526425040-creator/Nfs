@@ -42,16 +42,17 @@ fn run() -> Result<(), String> {
                     let occurrences: Vec<usize> = decoded.windows(4).enumerate()
                         .filter_map(|(i, w)| (w == needle).then_some(i)).take(16).collect();
                     let header_at = (entry.out_size as usize).checked_sub(entry.header_from_end as usize)
-                        .and_then(|v| v.checked_add(0x88));
+                        .and_then(|v| v.checked_add(0x54));
                     let header = header_at.and_then(|p| decoded.get(p..p + 48).map(|h| (p, h)));
                     let name_hex = header_at.and_then(|p| decoded.get(p.saturating_sub(0x18)..p))
                         .map(|b| b.iter().map(|v| format!("{v:02X}")).collect::<String>())
                         .unwrap_or_default();
                     diagnostics.push(format!(
-                        r#"{{"hash":"{:08X}","offset":{},"compressed":{},"out_size":{},"header_from_end":{},"decoded_len":{},"hash_occurrences":{:?},"header_offset":{},"name_hex":"{}","header_hex":"{}","tail_hex":"{}"}}"#,
+                        r#"{{"hash":"{:08X}","offset":{},"compressed":{},"out_size":{},"header_from_end":{},"decoded_len":{},"hash_occurrences":{:?},"header_offset":{},"header_hash_matches":{},"name_hex":"{}","header_hex":"{}","tail_hex":"{}"}}"#,
                         entry.hash.0, entry.abs_offset, entry.size, entry.out_size,
                         entry.header_from_end, decoded.len(), occurrences,
                         header_at.map(|x| x.to_string()).unwrap_or_else(|| "null".into()),
+                        header.as_ref().map(|(_, h)| h.get(0..4).map(|v| v == needle).unwrap_or(false)).unwrap_or(false),
                         name_hex,
                         header.map(|(_, h)| h.iter().map(|b| format!("{b:02X}")).collect::<String>()).unwrap_or_default(),
                         decoded.iter().rev().take(128).rev().map(|b| format!("{b:02X}")).collect::<String>()

@@ -44,7 +44,8 @@ def _bmp_info(data: bytes, offset: int) -> dict | None:
     else:
         return None
     end = offset + declared_size if declared_size else len(data)
-    if width <= 0 or height == 0 or planes != 1 or bpp not in (1, 4, 8, 16, 24, 32):
+    if (width <= 0 or width > 16384 or height == 0 or abs(height) > 16384
+            or planes != 1 or bpp not in (1, 4, 8, 16, 24, 32)):
         return None
     if pixel_offset < 14 + dib_size or offset + pixel_offset > len(data) or end > len(data) or end < offset + pixel_offset:
         return None
@@ -80,9 +81,12 @@ def _jpeg_info(data: bytes, offset: int) -> dict | None:
             height = int.from_bytes(data[pos + 3:pos + 5], "big")
             width = int.from_bytes(data[pos + 5:pos + 7], "big")
             components = data[pos + 7]
-            if width and height and components:
-                return {"format":"JPEG","offset":offset,"width":width,"height":height,
-                        "precision":precision,"components":components}
+            if (precision not in (8, 12, 16) or not (1 <= width <= 16384)
+                    or not (1 <= height <= 16384) or components not in (1, 3, 4)
+                    or size != 8 + 3 * components):
+                return None
+            return {"format":"JPEG","offset":offset,"width":width,"height":height,
+                    "precision":precision,"components":components}
             return None
         pos += size
     return None

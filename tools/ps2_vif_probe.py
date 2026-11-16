@@ -42,7 +42,10 @@ def parse_vif_stream(payload: bytes) -> dict:
     padding_bytes = 0
 
     while pos < len(payload):
-        if payload[pos] == PADDING_BYTE:
+        # The resource has a leading 0x11 fill run before the VIF stream.
+        # Inside the stream, 0x11 is valid command/immediate/data content and
+        # must never be stripped byte-by-byte.
+        if pos == 0 and payload[pos] == PADDING_BYTE:
             end = pos
             while end < len(payload) and payload[end] == PADDING_BYTE:
                 end += 1
@@ -56,6 +59,10 @@ def parse_vif_stream(payload: bytes) -> dict:
                 padding_bytes += len(tail)
                 pos = len(payload)
                 break
+        if payload[pos:] and all(byte == PADDING_BYTE for byte in payload[pos:]):
+            padding_bytes += len(payload) - pos
+            pos = len(payload)
+            break
             raise ValueError(f"non-padding tail of {len(tail)} bytes at 0x{pos:X}")
 
         word = struct.unpack_from("<I", payload, pos)[0]

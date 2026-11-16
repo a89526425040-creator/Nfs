@@ -169,11 +169,13 @@ def main() -> int:
         if stats["ebit_instructions"] == 0:
             continue
         candidates.append((program, stats))
+    support_programs = [program for program in dvp["programs"] if int(program["vu_start"]) != 0]
+    support_upload = b"".join(make_mpg_upload(program, args.dvp_dir) for program in support_programs)
     args.output_dir.mkdir(parents=True, exist_ok=True)
 
     results = []
     for program, stats in candidates:
-        upload = make_mpg_upload(program, args.dvp_dir)
+        upload = support_upload + make_mpg_upload(program, args.dvp_dir)
         for stream_index, stream in enumerate(streams):
             raw_name = stream.get("raw_file")
             if not raw_name:
@@ -196,6 +198,10 @@ def main() -> int:
     report = {
         "vehicle": resource["path"],
         "candidate_programs": len(candidates),
+        "support_programs_loaded": [
+            {"program_id": program["program_id"], "vu_start": program["vu_start"], "bytes": program["bytes"]}
+            for program in support_programs
+        ],
         "streams": len(streams),
         "replays": results,
     }

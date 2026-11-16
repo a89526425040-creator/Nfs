@@ -12,7 +12,7 @@ class Ps2ResourceProbeTests(unittest.TestCase):
             root = Path(tmp)
             archive = root / "archive.bin"
             archive.write_bytes(
-                bytes.fromhex("00401380 08000000") + b"HELLO_RESOURCE" + b"\\0" * 8
+                bytes.fromhex("00401380 08000000") + b"HELLO_RESOURCE" + b"\x00" * 12
             )
             entry = {
                 "index": "7", "path": "CARS\\TEST\\GEOMETRY.BIN",

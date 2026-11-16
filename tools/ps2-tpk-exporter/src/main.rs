@@ -59,7 +59,7 @@ fn run() -> Result<(), String> {
     let report = format!(
         r#"{{"input_bytes":{},"entries":{},"decoded":{},"skipped":[{}],"textures":[{}],"diagnostics":[{}]}}"#,
         bytes.len(), entries.len(), decoded,
-        skipped.iter().map(|s| format!("\\"{}\\"", s.replace('"', "\\\\""))).collect::<Vec<_>>().join(","),
+        skipped.iter().map(|s| format!("{:?}", s)).collect::<Vec<_>>().join(","),
         metadata.join(","),
         diagnostics.join(",")
     ) + "\n";

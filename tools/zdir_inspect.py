@@ -10,8 +10,11 @@ import sys
 from collections import defaultdict
 from pathlib import Path
 
-RECORD = struct.Struct("<IIIII I".replace(" ", ""))
+# name hash:u32, archive id:i32, local sector offset:u32,
+# total offset:u32, file size:i32, checksum:u32
+RECORD = struct.Struct("<IiIIiI")
 SECTOR_SIZE = 2048
+ARCHIVE_COUNT = 4
 
 
 def parse_index(data: bytes):
@@ -23,13 +26,12 @@ def parse_index(data: bytes):
     rows = []
     for index, values in enumerate(RECORD.iter_unpack(data)):
         name_hash, archive_id, local_sectors, total_offset, size, checksum = values
-        byte_offset = local_sectors * SECTOR_SIZE
         rows.append({
             "index": index,
             "name_hash": f"{name_hash:08X}",
             "archive_id": archive_id,
             "local_offset_sectors": local_sectors,
-            "byte_offset": byte_offset,
+            "byte_offset": local_sectors * SECTOR_SIZE,
             "total_offset": total_offset,
             "size": size,
             "checksum": f"{checksum:08X}",
@@ -45,12 +47,17 @@ def inspect(data: bytes, archive_sizes: dict[int, int]):
     for row in rows:
         aid = row["archive_id"]
         groups[aid].append(row)
+        if aid < 0 or aid >= ARCHIVE_COUNT:
+            problems.append(f"entry {row['index']}: invalid archive id {aid}")
+            continue
         if row["size"] < 0:
-            problems.append(f"entry {row['index']}: negative size")
+            problems.append(f"entry {row['index']}: negative size {row['size']}")
+            continue
         if archive_sizes:
             if aid not in archive_sizes:
                 problems.append(f"entry {row['index']}: no size supplied for archive {aid}")
-            elif row["byte_offset"] > archive_sizes[aid] or row["size"] > archive_sizes[aid] - row["byte_offset"]:
+            elif (row["byte_offset"] > archive_sizes[aid]
+                  or row["size"] > archive_sizes[aid] - row["byte_offset"]):
                 problems.append(
                     f"entry {row['index']}: range "
                     f"[{row['byte_offset']}, {row['byte_offset'] + row['size']}) "
@@ -70,13 +77,16 @@ def inspect(data: bytes, archive_sizes: dict[int, int]):
 
     for aid in sorted(set(groups) | set(archive_sizes)):
         entries = groups.get(aid, [])
+        valid_entries = [e for e in entries if e["size"] >= 0 and 0 <= aid < ARCHIVE_COUNT]
         summary["archives"][str(aid)] = {
             "file": f"ZZDATA{aid}.BIN",
             "archive_bytes": archive_sizes.get(aid),
             "entry_count": len(entries),
-            "declared_payload_bytes": sum(e["size"] for e in entries),
-            "max_entry_bytes": max((e["size"] for e in entries), default=0),
-            "max_end_offset": max((e["byte_offset"] + e["size"] for e in entries), default=0),
+            "declared_payload_bytes": sum(e["size"] for e in valid_entries),
+            "max_entry_bytes": max((e["size"] for e in valid_entries), default=0),
+            "max_end_offset": max(
+                (e["byte_offset"] + e["size"] for e in valid_entries), default=0
+            ),
         }
 
     return summary, rows
@@ -98,8 +108,8 @@ def main():
         try:
             key, value = item.split("=", 1)
             archive_id = int(key, 10)
-            if archive_id < 0 or archive_id > 255:
-                raise ValueError
+            if archive_id < 0 or archive_id >= ARCHIVE_COUNT:
+                raise ValueError("archive ID must be 0, 1, 2, or 3")
             archive_sizes[archive_id] = Path(value).stat().st_size
         except (ValueError, OSError) as exc:
             parser.error(f"invalid --archive {item!r}: {exc}")

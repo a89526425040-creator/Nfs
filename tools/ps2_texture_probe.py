@@ -5,7 +5,6 @@ from __future__ import annotations
 import argparse
 import csv
 import json
-import struct
 from collections import Counter
 from pathlib import Path
 
@@ -94,7 +93,7 @@ def main():
     except (OSError, ValueError) as exc:
         parser.error(str(exc))
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(json.dumps({"resources": resources}, indent=2) + "\\n", encoding="utf-8")
+    args.output.write_text(json.dumps({"resources": resources}, indent=2) + "\n", encoding="utf-8")
     print(f"Inspected {len(resources)} car texture archives.")
     return 0
 

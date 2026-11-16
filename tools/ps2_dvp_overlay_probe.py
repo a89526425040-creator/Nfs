@@ -13,7 +13,7 @@ from pathlib import Path
 def _cstring(data: bytes, offset: int) -> str:
     if offset < 0 or offset >= len(data):
         raise ValueError(f"string offset 0x{offset:X} outside table")
-    end = data.find(b"\\0", offset)
+    end = data.find(b"\0", offset)
     if end < 0:
         end = len(data)
     return data[offset:end].decode("ascii", "replace")

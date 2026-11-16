@@ -57,6 +57,7 @@ uint32_t gs_gif_epoch() { return 0; }
 void gs_submit_epoch(uint32_t) {}
 bool gs_channel_end(int, uint32_t) { return true; }
 double hw_now() { return 0.0; }
+void profile_this_thread(const char*) {}
 
 int main(int argc, char** argv) {
     if (argc != 3) {

@@ -27,7 +27,6 @@ jobs:
           g++ -std=c++20 -O2 -ffp-contract=off -pthread \
             -I "$RUNNER_TEMP/ps2kit/runtime" \
             "$RUNNER_TEMP/ps2kit/runtime/core.cpp" \
-            "$RUNNER_TEMP/ps2kit/runtime/services_stub.cpp" \
             "$RUNNER_TEMP/ps2kit/runtime/vu.cpp" \
             "$RUNNER_TEMP/ps2kit/runtime/vif1.cpp" \
             "$RUNNER_TEMP/ps2kit/runtime/vu1_none.cpp" \

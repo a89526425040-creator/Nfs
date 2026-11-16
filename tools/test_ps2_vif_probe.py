@@ -15,6 +15,7 @@ class Ps2VifProbeTests(unittest.TestCase):
         result = parse_vif_stream(data)
         self.assertEqual(result["command_count"], 3)
         self.assertEqual(result["unpack_vector_count"], 4)
+        self.assertEqual(result["unpack_records"][2]["all_values"], [0, 0, 0, 0, 0, 0])
         self.assertEqual(result["unpack_data_bytes"], 44)
         self.assertEqual(result["padding_bytes"], 0)
         self.assertEqual(result["consumed_bytes"], len(data))

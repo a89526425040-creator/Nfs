@@ -1,0 +1,7 @@
+[package]
+name = "ps2-tpk-exporter"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+gizmo-nfs = { git = "https://github.com/bdrtr/PryHUB", package = "gizmo-nfs", features = ["png"] }

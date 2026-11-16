@@ -105,16 +105,14 @@ def parse_tpk(data: bytes) -> dict:
                 else:
                     for pos in range(0, size, 0x18):
                         name_hash, blob_offset, compressed, uncompressed = struct.unpack_from("<IIii", raw, pos)
-                        user_flags, flags, ref_count, ptr = struct.unpack_from("<BBHI", raw, pos + 0x10)
+                        descriptor_word_4, descriptor_word_5 = struct.unpack_from("<II", raw, pos + 0x10)
                         stream_entries.append({
                             "name_hash": f"0x{name_hash:08X}",
                             "blob_offset": blob_offset,
                             "compressed_bytes": compressed,
                             "uncompressed_bytes": uncompressed,
-                            "user_flags": user_flags,
-                            "flags": flags,
-                            "ref_count": ref_count,
-                            "ptr": ptr,
+                            "descriptor_word_4": descriptor_word_4,
+                            "descriptor_word_5": descriptor_word_5,
                         })
     result["header"] = header
     result["index_count"] = len(index_entries)

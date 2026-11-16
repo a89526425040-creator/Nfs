@@ -4,7 +4,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from ps2_vu_replay import make_mpg_upload, parse_gif_capture, vu_program_stats
+from ps2_vu_replay import (
+    build_vif_state, make_mpg_upload, make_vutext_program,
+    parse_gif_capture, rewrite_mscal, vu_program_stats,
+)
 
 
 class Ps2VuReplayTests(unittest.TestCase):
@@ -37,6 +40,43 @@ class Ps2VuReplayTests(unittest.TestCase):
             self.assertEqual(second, (0x4A << 24) | (1 << 16) | 1)
             self.assertEqual(result[4:12], raw[:8])
             self.assertEqual(result[16:24], raw[8:])
+
+    def test_builds_vutext_chunks_at_the_declared_vu_address(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / "code.bin").write_bytes(bytes(2056))
+            program = make_vutext_program(
+                {"index": 0, "vu": 0x800, "bytes": 2056, "file": "code.bin"},
+                root,
+            )
+            self.assertEqual(program["vu_start"], 0x800)
+            self.assertEqual(
+                program["chunks"],
+                [
+                    {"bytes": 2048, "vu_address": 0x800},
+                    {"bytes": 8, "vu_address": 0x1000},
+                ],
+            )
+
+    def test_initializes_vif_top_state(self):
+        words = struct.unpack("<IIIII", build_vif_state(638, 320))
+        self.assertEqual(words, (
+            0x01000101, 0x05000000, 0x0300027E, 0x02000140, 0x0400027E
+        ))
+
+    def test_rewrites_only_mscal_commands(self):
+        raw = struct.pack("<III", 0x14000000, 0x00000000, 0x14000000)
+        meta = {
+            "commands": [
+                {"offset": 0, "label": "MSCAL"},
+                {"offset": 8, "label": "MSCAL"},
+            ]
+        }
+        rewritten, count = rewrite_mscal(raw, meta, 0x100)
+        self.assertEqual(count, 2)
+        self.assertEqual(struct.unpack("<III", rewritten), (
+            0x14000100, 0x00000000, 0x14000100
+        ))
 
     def test_parses_a_single_gif_eop_tag(self):
         with tempfile.TemporaryDirectory() as temp:

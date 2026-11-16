@@ -12,8 +12,8 @@ def make_tpk():
     name_hash = 0x1234ABCD
     texture_header = bytearray(0x7C)
     struct.pack_into("<I", texture_header, 0, 5)
-    texture_header[4:16] = b"CARTEXTURES"
-    texture_header[0x20:0x28] = b"car.tpk"
+    texture_header[4:15] = b"CARTEXTURES"
+    texture_header[0x20:0x27] = b"car.tpk"
     struct.pack_into("<I", texture_header, 0x60, 0x87654321)
 
     index_chunk = chunk(INDEX, struct.pack("<II", name_hash, 0))

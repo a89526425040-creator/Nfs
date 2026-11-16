@@ -164,6 +164,10 @@ def parse_vif_stream(payload: bytes) -> dict:
                 "min_value": min(values) if values else None,
                 "max_value": max(values) if values else None,
             }
+            if components == 3 and bits_per_component == 32 and (immediate & 0x03FF) == 2:
+                # Preserve the full candidate XYZ-like stream for an explicitly
+                # experimental point-cloud export. Semantics remain unverified.
+                record["all_values"] = values
             if bits_per_component == 32:
                 floats = [
                     struct.unpack("<f", struct.pack("<I", value & 0xFFFFFFFF))[0]

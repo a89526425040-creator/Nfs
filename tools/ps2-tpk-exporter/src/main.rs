@@ -44,16 +44,11 @@ fn run() -> Result<(), String> {
                     let header_at = (entry.out_size as usize).checked_sub(entry.header_from_end as usize)
                         .and_then(|v| v.checked_add(0x88));
                     let header = header_at.and_then(|p| decoded.get(p..p + 48).map(|h| (p, h)));
-                    let debug_name = header.as_ref().map(|(p, _)| {
-                        let b = &decoded[p.saturating_sub(0x18)..*p];
-                        String::from_utf8_lossy(b.split(|x| *x == 0).next().unwrap_or_default()).to_string()
-                    }).unwrap_or_default();
                     diagnostics.push(format!(
-                        "{{\\"hash\\":\\"{:08X}\\",\\"offset\\":{},\\"compressed\\":{},\\"out_size\\":{},\\"header_from_end\\":{},\\"decoded_len\\":{},\\"hash_occurrences\\":{:?},\\"header_offset\\":{},\\"debug_name\\":\\"{}\\",\\"header_hex\\":\\"{}\\",\\"tail_hex\\":\\"{}\\"}}",
+                        "{{\\"hash\\":\\"{:08X}\\",\\"offset\\":{},\\"compressed\\":{},\\"out_size\\":{},\\"header_from_end\\":{},\\"decoded_len\\":{},\\"hash_occurrences\\":{:?},\\"header_offset\\":{},\\"header_hex\\":\\"{}\\",\\"tail_hex\\":\\"{}\\"}}",
                         entry.hash.0, entry.abs_offset, entry.size, entry.out_size,
                         entry.header_from_end, decoded.len(), occurrences,
                         header_at.map(|x| x.to_string()).unwrap_or_else(|| "null".into()),
-                        debug_name.replace('"', "\\\\""),
                         header.map(|(_, h)| h.iter().map(|b| format!("{b:02X}")).collect::<String>()).unwrap_or_default(),
                         decoded.iter().rev().take(128).rev().map(|b| format!("{b:02X}")).collect::<String>()
                     ));
@@ -62,10 +57,11 @@ fn run() -> Result<(), String> {
         }
     }
     let report = format!(
-        "{{\"input_bytes\":{},\"entries\":{},\"decoded\":{},\"skipped\":[{}],\"textures\":[{}]}}\n",
+        "{{\\"input_bytes\\":{},\\"entries\\":{},\\"decoded\\":{},\\"skipped\\":[{}],\\"textures\\":[{}],\\"diagnostics\\":[{}]}}\\n",
         bytes.len(), entries.len(), decoded,
-        skipped.iter().map(|s| format!("\"{}\"", s.replace('"', "\\\""))).collect::<Vec<_>>().join(","),
-        metadata.join(",")
+        skipped.iter().map(|s| format!("\\"{}\\"", s.replace('"', "\\\\""))).collect::<Vec<_>>().join(","),
+        metadata.join(","),
+        diagnostics.join(",")
     );
     fs::write(output.join("texture-manifest.json"), report)
         .map_err(|e| format!("write texture manifest: {e}"))?;

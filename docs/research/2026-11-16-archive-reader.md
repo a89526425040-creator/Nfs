@@ -22,6 +22,13 @@ Date: 2026-11-16
 - `tools/zdir_inspect.py`: defensive parser for the candidate 24-byte record.
 - `tools/test_zdir_inspect.py`: synthetic tests for field decoding, sector offsets, malformed lengths, negative sizes, invalid archive IDs, and archive-boundary checks.
 - `docs/formats/zdir-zzdata.md`: field table and explicit evidence status.
+- `.github/workflows/test-tools.yml`: runs the parser's synthetic tests on pushes and pull requests.
+
+Run the same test suite locally with:
+
+```sh
+python -m unittest discover -s tools -p "test_*.py" -v
+```
 
 The parser intentionally does not extract or commit any game payload. The updated `Iso` workflow temporarily extracts the ZDIR index and four ZZDATA files on the GitHub runner, validates every indexed byte range against the actual archive sizes, then commits only a compact report.
 

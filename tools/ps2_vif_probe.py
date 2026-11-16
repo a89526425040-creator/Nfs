@@ -217,7 +217,7 @@ def main():
         parser.error(str(exc))
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(
-        json.dumps({"resources": resources}, indent=2) + "\\n",
+        json.dumps({"resources": resources}, indent=2) + "\n",
         encoding="utf-8",
     )
     print(f"Parsed {sum(len(r['streams']) for r in resources)} VIF streams.")

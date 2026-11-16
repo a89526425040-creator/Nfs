@@ -4,7 +4,7 @@ import unittest
 from ps2_dvp_overlay_probe import parse_dvp_overlays
 
 
-def make_elf(table_payload=None):
+def make_elf(table_payload=None, overlay_type=0x7FFFF421):
     overlay_name = b".DVP.overlay..0x0.12345.44.0\0"
     section_names = (
         b"\0.shstrtab\0.DVP.ovlytab\0.DVP.ovlystrtab\0"
@@ -37,7 +37,7 @@ def make_elf(table_payload=None):
         struct.pack("<IIIIIIIIII", shstr_name, 3, 0, 0, offsets["shstr"], len(section_names), 0, 0, 1, 0),
         struct.pack("<IIIIIIIIII", table_name, 0x7FFFF420, 0, 0, offsets["table"], len(table_payload), 3, 0, 4, 12),
         struct.pack("<IIIIIIIIII", strings_name, 3, 0, 0, offsets["strings"], len(overlay_strings), 0, 0, 1, 0),
-        struct.pack("<IIIIIIIIII", overlay_shname, 0x7FFFF421, 5, 0, offsets["overlay"], 16, 0, 0, 1, 0),
+        struct.pack("<IIIIIIIIII", overlay_shname, overlay_type, 5, 0, offsets["overlay"], 16, 0, 0, 1, 0),
     ]
     sections_data.extend(b"".join(headers))
     ident = bytes.fromhex("7f454c46010101") + bytes(9)
@@ -59,6 +59,15 @@ class DvpOverlayProbeTests(unittest.TestCase):
         self.assertEqual(program["program_id"], "12345")
         self.assertEqual(program["vu_start"], 0)
         self.assertEqual(program["bytes"], 16)
+        self.assertTrue(program["contiguous"])
+
+    def test_marks_nobits_overlay_as_non_file_backed(self):
+        report = parse_dvp_overlays(make_elf(overlay_type=8))
+        program = report["programs"][0]
+        self.assertEqual(program["allocated_bytes"], 16)
+        self.assertEqual(program["file_backed_bytes"], 0)
+        self.assertEqual(program["bytes"], 0)
+        self.assertFalse(program["chunks"][0]["file_backed"])
         self.assertTrue(program["contiguous"])
 
     def test_rejects_table_with_wrong_entry_stride(self):

@@ -15,7 +15,7 @@ def _cstring(data: bytes, offset: int) -> str:
         raise ValueError(f"string offset 0x{offset:X} outside table")
     end = data.find(b"\\0", offset)
     if end < 0:
-        raise ValueError(f"unterminated string at 0x{offset:X}")
+        end = len(data)
     return data[offset:end].decode("ascii", "replace")
 
 
@@ -48,15 +48,28 @@ def parse_dvp_overlays(elf: bytes) -> dict:
         raise ValueError("ELF has no .DVP.ovlytab / .DVP.ovlystrtab pair")
     if table["size"] % 12:
         raise ValueError(f".DVP.ovlytab size {table['size']} is not divisible by 12")
-    str_data = elf[strings["offset"]:strings["offset"] + strings["size"]]
+    linked_strings = sections[table["link"]] if table["link"] < len(sections) else strings
+    if linked_strings["type"] != 3:
+        linked_strings = strings
+    str_data = elf[linked_strings["offset"]:linked_strings["offset"] + linked_strings["size"]]
+    shstr_data = names
     tab_data = elf[table["offset"]:table["offset"] + table["size"]]
+    overlay_sections = [section for section in sections if section["name"].startswith(".DVP.overlay.")]
+    overlay_sections.sort(key=lambda section: section["index"])
     entries = []
     groups: dict[str, list[dict]] = {}
     errors = []
     for pos in range(0, len(tab_data), 12):
         name_off, ee_addr, vu_addr = struct.unpack_from("<III", tab_data, pos)
         name = _cstring(str_data, name_off)
+        if not name.startswith(".DVP.overlay."):
+            alternate = _cstring(shstr_data, name_off)
+            if alternate.startswith(".DVP.overlay."):
+                name = alternate
         section = by_name.get(name)
+        if section is None and pos // 12 < len(overlay_sections):
+            section = overlay_sections[pos // 12]
+            name = section["name"]
         match = re.fullmatch(r"\.DVP\.overlay\.\.(?:0x[0-9a-fA-F]+|unknvma)\.(\d+)\.(\d+)\.(\d+)", name)
         if section is None:
             errors.append(f"table entry {pos // 12}: section {name!r} not found")
@@ -94,6 +107,8 @@ def parse_dvp_overlays(elf: bytes) -> dict:
         })
     return {
         "table_entries": len(tab_data) // 12,
+        "table_link": table["link"],
+        "linked_string_section": linked_strings["name"],
         "entries": entries,
         "programs": programs,
         "errors": errors,

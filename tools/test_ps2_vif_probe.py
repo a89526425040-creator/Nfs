@@ -34,6 +34,12 @@ class Ps2VifProbeTests(unittest.TestCase):
         self.assertEqual(result["unpack_data_bytes"], 20)
         self.assertEqual(result["command_counts"], {"NOP": 1, "UNPACK_3x16": 1})
 
+    def test_preserves_0x11_inside_vif_command_immediate(self):
+        data = bytes.fromhex("11800361") + bytes(8) + bytes(4)
+        result = parse_vif_stream(data)
+        self.assertEqual(result["command_count"], 2)
+        self.assertEqual(result["command_counts"], {"NOP": 1, "UNPACK_1x16": 1})
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -137,7 +137,7 @@ def main() -> int:
         (args.out_dir / filename).write_bytes(program.pop("data"))
         program["file"] = filename
     args.json.parent.mkdir(parents=True, exist_ok=True)
-    args.json.write_text(json.dumps(report, indent=2) + "\\n", encoding="utf-8")
+    args.json.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     print(
         f"DVP overlay table: {report['table_entries']} entries, "
         f"{len(report['programs'])} grouped programs, {len(report['errors'])} errors"

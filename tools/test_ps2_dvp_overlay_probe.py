@@ -59,6 +59,7 @@ class DvpOverlayProbeTests(unittest.TestCase):
         self.assertEqual(program["program_id"], "12345")
         self.assertEqual(program["vu_start"], 0)
         self.assertEqual(program["bytes"], 16)
+        self.assertTrue(program["zero_filled"])
         self.assertTrue(program["contiguous"])
 
     def test_marks_nobits_overlay_as_non_file_backed(self):
@@ -68,6 +69,7 @@ class DvpOverlayProbeTests(unittest.TestCase):
         self.assertEqual(program["file_backed_bytes"], 0)
         self.assertEqual(program["bytes"], 0)
         self.assertFalse(program["chunks"][0]["file_backed"])
+        self.assertTrue(program["zero_filled"])
         self.assertTrue(program["contiguous"])
 
     def test_rejects_table_with_wrong_entry_stride(self):

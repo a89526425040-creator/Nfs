@@ -1,5 +1,38 @@
-use gizmo_nfs::{export, prelude::decompress, Tpk};
+use gizmo_nfs::{export, prelude::decompress, TexFormat, Tpk};
 use std::{env, fs, path::PathBuf, process::ExitCode};
+
+
+fn ps2_unswizzle_p8_rgba(texture: &mut gizmo_nfs::NfsTexture) -> Result<(), String> {
+    let width = texture.width as usize;
+    let height = texture.height as usize;
+    if width % 16 != 0 || height % 4 != 0 {
+        return Err(format!("PSMT8 dimensions are not aligned: {}x{}", width, height));
+    }
+    let expected = width.checked_mul(height).and_then(|v| v.checked_mul(4))
+        .ok_or("PSMT8 image dimensions overflow")?;
+    if texture.rgba.len() != expected {
+        return Err(format!("PSMT8 RGBA length {} does not match {}", texture.rgba.len(), expected));
+    }
+    let source = texture.rgba.clone();
+    for y in 0..height {
+        for x in 0..width {
+            let block_location = (y & !0xF) * width + (x & !0xF) * 2;
+            let swap_selector = (((y + 2) >> 2) & 1) * 4;
+            let pos_y = (((y & !3) >> 1) + (y & 1)) & 7;
+            let column_location = pos_y * width * 2 + ((x + swap_selector) & 7) * 4;
+            let byte_num = ((y >> 1) & 1) + ((x >> 2) & 2);
+            let source_pixel = block_location + column_location + byte_num;
+            if source_pixel >= width * height {
+                return Err(format!("PSMT8 source pixel {source_pixel} outside {}x{}", width, height));
+            }
+            let dst = (y * width + x) * 4;
+            let src = source_pixel * 4;
+            texture.rgba[dst..dst + 4].copy_from_slice(&source[src..src + 4]);
+            texture.rgba[dst + 3] = (u16::from(texture.rgba[dst + 3]) * 2).min(255) as u8;
+        }
+    }
+    Ok(())
+}
 
 fn run() -> Result<(), String> {
     let mut args = env::args_os().skip(1);
@@ -17,16 +50,25 @@ fn run() -> Result<(), String> {
     let mut diagnostics = Vec::new();
     for entry in &entries {
         match Tpk::decode_one(&bytes, entry) {
-            Ok(texture) => {
+            Ok(mut texture) => {
+                let source_format = format!("{:?}", texture.source_format);
+                let ps2_layout = if matches!(texture.source_format, TexFormat::P8) {
+                    ps2_unswizzle_p8_rgba(&mut texture)?;
+                    "PSMT8-unswizzled-alpha7-expanded"
+                } else {
+                    "linear"
+                };
                 let name = export::png_name(&texture);
                 let png = export::png_bytes(&texture).map_err(|e| format!("PNG {}: {e}", name))?;
                 fs::write(output.join(&name), png).map_err(|e| format!("write {}: {e}", name))?;
                 metadata.push(format!(
-                    "{{\"hash\":\"{:08X}\",\"name\":\"{}\",\"width\":{},\"height\":{},\"file\":\"{}\"}}",
+                    "{{\"hash\":\"{:08X}\",\"name\":\"{}\",\"width\":{},\"height\":{},\"source_format\":\"{}\",\"ps2_layout\":\"{}\",\"file\":\"{}\"}}",
                     texture.hash.0,
                     texture.name.replace('\\', "\\\\").replace('"', "\\\""),
                     texture.width,
                     texture.height,
+                    source_format,
+                    ps2_layout,
                     name
                 ));
                 decoded += 1;

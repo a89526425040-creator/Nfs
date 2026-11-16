@@ -173,7 +173,10 @@ def main() -> int:
 
     results = []
     for program, stats in candidates:
-        upload = support_upload + make_mpg_upload(program, args.dvp_dir)
+        # The geometry leaf inherits VIF state from earlier game DMA packets.
+        # Recreate the normal CL=1/WL=1 cycle and STMOD=0 before replay.
+        vif_state = struct.pack("<II", 0x01000101, 0x05000000)
+        upload = vif_state + support_upload + make_mpg_upload(program, args.dvp_dir)
         for stream_index, stream in enumerate(streams):
             raw_name = stream.get("raw_file")
             if not raw_name:

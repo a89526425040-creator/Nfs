@@ -32,6 +32,29 @@ def unpack_payload_bytes(command: int, count: int) -> tuple[int, int, int]:
     return data_bytes, components, bits_per_component
 
 
+def decode_unpack_values(data: bytes, scalar_count: int, bits: int, unsigned: bool) -> list[int]:
+    """Decode tightly packed little-endian UNPACK scalars."""
+    mask = (1 << bits) - 1
+    values = []
+    accumulator = 0
+    available = 0
+    cursor = 0
+    for _ in range(scalar_count):
+        while available < bits:
+            if cursor >= len(data):
+                raise ValueError("UNPACK scalar data ended unexpectedly")
+            accumulator |= data[cursor] << available
+            available += 8
+            cursor += 1
+        value = accumulator & mask
+        accumulator >>= bits
+        available -= bits
+        if not unsigned and value & (1 << (bits - 1)):
+            value -= 1 << bits
+        values.append(value)
+    return values
+
+
 def parse_vif_stream(payload: bytes) -> dict:
     pos = 0
     commands = []
@@ -39,6 +62,7 @@ def parse_vif_stream(payload: bytes) -> dict:
     unpack_formats = Counter()
     unpack_vectors = 0
     unpack_data_bytes = 0
+    unpack_records = []
     padding_bytes = 0
 
     while pos < len(payload):
@@ -120,6 +144,36 @@ def parse_vif_stream(payload: bytes) -> dict:
                 f"{label} at 0x{command_start:X} needs {data_bytes} data bytes, "
                 f"only {len(payload) - pos} remain"
             )
+        if 0x60 <= opcode <= 0x7F:
+            unpack_data = payload[pos:pos + data_bytes]
+            unsigned = bool(immediate & 0x4000)
+            scalar_count = effective_num * components
+            values = decode_unpack_values(
+                unpack_data, scalar_count, bits_per_component, unsigned
+            )
+            record = {
+                "offset": command_start,
+                "format": label,
+                "vectors": effective_num,
+                "components": components,
+                "bits_per_component": bits_per_component,
+                "unsigned": unsigned,
+                "flg": bool(immediate & 0x8000),
+                "vu_address": immediate & 0x03FF,
+                "sample_values": values[:12],
+                "min_value": min(values) if values else None,
+                "max_value": max(values) if values else None,
+            }
+            if bits_per_component == 32:
+                floats = [
+                    struct.unpack("<f", struct.pack("<I", value & 0xFFFFFFFF))[0]
+                    for value in values[:12]
+                ]
+                record["sample_f32"] = [
+                    round(value, 7) if abs(value) < 1e7 else None
+                    for value in floats
+                ]
+            unpack_records.append(record)
         pos += data_bytes
         counts[label] += 1
         commands.append({
@@ -140,6 +194,7 @@ def parse_vif_stream(payload: bytes) -> dict:
         "unpack_format_counts": dict(sorted(unpack_formats.items())),
         "unpack_vector_count": unpack_vectors,
         "unpack_data_bytes": unpack_data_bytes,
+        "unpack_records": unpack_records,
         "padding_bytes": padding_bytes,
         "consumed_bytes": pos,
     }

@@ -84,11 +84,17 @@ def parse_dvp_overlays(elf: bytes) -> dict:
             errors.append(f"overlay name does not match expected convention: {name}")
             continue
         program_id, line, chunk = match.groups()
-        raw = elf[section["offset"]:section["offset"] + section["size"]]
+        section_type = section["type"]
+        file_backed = section_type != 8  # ELF SHT_NOBITS sections have no payload in the file.
+        raw = (
+            elf[section["offset"]:section["offset"] + section["size"]]
+            if file_backed else b""
+        )
         entry = {
             "name": name, "program_id": program_id, "line": int(line), "chunk": int(chunk),
-            "ee_address": ee_addr, "vu_address": vu_addr, "bytes": len(raw),
-            "sha256": hashlib.sha256(raw).hexdigest(), "data": raw,
+            "ee_address": ee_addr, "vu_address": vu_addr, "section_type": section_type,
+            "file_backed": file_backed, "allocated_bytes": section["size"],
+            "bytes": len(raw), "sha256": hashlib.sha256(raw).hexdigest(), "data": raw,
         }
         entries.append({k: v for k, v in entry.items() if k != "data"})
         groups.setdefault(program_id, []).append(entry)
@@ -103,10 +109,13 @@ def parse_dvp_overlays(elf: bytes) -> dict:
             if chunk["vu_address"] != expected:
                 contiguous = False
             combined.extend(chunk["data"])
-            expected = chunk["vu_address"] + len(chunk["data"])
+            expected = chunk["vu_address"] + chunk["allocated_bytes"]
         programs.append({
             "program_id": program_id, "vu_start": start,
-            "chunk_count": len(chunks), "bytes": len(combined),
+            "chunk_count": len(chunks),
+            "allocated_bytes": sum(item["allocated_bytes"] for item in chunks),
+            "file_backed_bytes": len(combined),
+            "bytes": len(combined),
             "contiguous": contiguous, "chunks": [
                 {k: v for k, v in item.items() if k != "data"} for item in chunks
             ], "data": bytes(combined),
@@ -145,13 +154,15 @@ def main() -> int:
     for program in report["programs"]:
         print(
             f"VU 0x{program['vu_start']:04X}: program {program['program_id']}, "
-            f"{program['chunk_count']} chunks, {program['bytes']} bytes, "
+            f"{program['chunk_count']} chunks, {program['allocated_bytes']} allocated bytes, "
+            f"{program['file_backed_bytes']} file-backed bytes, "
             f"contiguous={program['contiguous']}"
         )
         for chunk in program["chunks"]:
             print(
                 f"  chunk {chunk['chunk']}: EE=0x{chunk['ee_address']:08X}, "
-                f"VU=0x{chunk['vu_address']:04X}, bytes={chunk['bytes']}, "
+                f"VU=0x{chunk['vu_address']:04X}, allocated={chunk['allocated_bytes']}, "
+                f"file_backed={chunk['file_backed']}, sh_type={chunk['section_type']}, "
                 f"name={chunk['name']}"
             )
     return 0

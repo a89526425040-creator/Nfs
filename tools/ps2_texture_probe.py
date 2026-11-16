@@ -19,6 +19,94 @@ MAGICS = {
 }
 
 
+
+def _bmp_info(data: bytes, offset: int) -> dict | None:
+    if offset + 26 > len(data):
+        return None
+    declared_size = int.from_bytes(data[offset + 2:offset + 6], "little")
+    pixel_offset = int.from_bytes(data[offset + 10:offset + 14], "little")
+    dib_size = int.from_bytes(data[offset + 14:offset + 18], "little")
+    if dib_size < 12 or offset + 14 + dib_size > len(data):
+        return None
+    if dib_size >= 40:
+        width = int.from_bytes(data[offset + 18:offset + 22], "little", signed=True)
+        height = int.from_bytes(data[offset + 22:offset + 26], "little", signed=True)
+        planes = int.from_bytes(data[offset + 26:offset + 28], "little")
+        bpp = int.from_bytes(data[offset + 28:offset + 30], "little")
+        compression = int.from_bytes(data[offset + 30:offset + 34], "little")
+        image_size = int.from_bytes(data[offset + 34:offset + 38], "little")
+    elif dib_size == 12:
+        width = int.from_bytes(data[offset + 18:offset + 20], "little")
+        height = int.from_bytes(data[offset + 20:offset + 22], "little")
+        planes = int.from_bytes(data[offset + 22:offset + 24], "little")
+        bpp = int.from_bytes(data[offset + 24:offset + 26], "little")
+        compression, image_size = 0, 0
+    else:
+        return None
+    end = offset + declared_size if declared_size else len(data)
+    if width <= 0 or height == 0 or planes != 1 or bpp not in (1, 4, 8, 16, 24, 32):
+        return None
+    if pixel_offset < 14 + dib_size or offset + pixel_offset > len(data) or end > len(data) or end < offset + pixel_offset:
+        return None
+    return {"format":"BMP","offset":offset,"file_bytes":declared_size,"width":width,
+            "height":height,"bits_per_pixel":bpp,"compression":compression,
+            "pixel_offset":pixel_offset,"image_bytes":image_size}
+
+
+def _jpeg_info(data: bytes, offset: int) -> dict | None:
+    if data[offset:offset + 3] != b"\xff\xd8\xff":
+        return None
+    sof = {0xC0,0xC1,0xC2,0xC3,0xC5,0xC6,0xC7,0xC9,0xCA,0xCB,0xCD,0xCE,0xCF}
+    pos = offset + 2
+    while pos + 4 <= len(data):
+        if data[pos] != 0xFF:
+            pos += 1
+            continue
+        while pos < len(data) and data[pos] == 0xFF:
+            pos += 1
+        if pos >= len(data):
+            return None
+        marker = data[pos]
+        pos += 1
+        if marker in (0xD8,0xD9,0x01) or 0xD0 <= marker <= 0xD7:
+            continue
+        if pos + 2 > len(data):
+            return None
+        size = int.from_bytes(data[pos:pos + 2], "big")
+        if size < 2 or pos + size > len(data):
+            return None
+        if marker in sof and size >= 8:
+            precision = data[pos + 2]
+            height = int.from_bytes(data[pos + 3:pos + 5], "big")
+            width = int.from_bytes(data[pos + 5:pos + 7], "big")
+            components = data[pos + 7]
+            if width and height and components:
+                return {"format":"JPEG","offset":offset,"width":width,"height":height,
+                        "precision":precision,"components":components}
+            return None
+        pos += size
+    return None
+
+
+def inspect_image_headers(payload: bytes) -> list[dict]:
+    images = []
+    for magic, label in MAGICS.items():
+        if label not in ("BMP","JPEG"):
+            continue
+        cursor = 0
+        while True:
+            found = payload.find(magic, cursor)
+            if found < 0:
+                break
+            cursor = found + 1
+            info = _bmp_info(payload, found) if label == "BMP" else _jpeg_info(payload, found)
+            if info is not None:
+                images.append(info)
+            if len(images) >= 512:
+                return sorted(images, key=lambda item:item["offset"])
+    return sorted(images, key=lambda item:item["offset"])
+
+
 def inspect_texture_resources(catalogue: Path, archives: dict[int, Path], limit: int = 32):
     selected = []
     seen = set()
@@ -53,6 +141,7 @@ def inspect_texture_resources(catalogue: Path, archives: dict[int, Path], limit:
                     cursor = found + 1
                     if len(signatures) >= 128:
                         break
+            images = inspect_image_headers(payload)
             selected.append({
                 "path": path,
                 "archive_id": archive_id,
@@ -65,6 +154,7 @@ def inspect_texture_resources(catalogue: Path, archives: dict[int, Path], limit:
                 "chunk_ids": dict(sorted(Counter(n["id"] for n in flat).items())),
                 "chunk_errors": scan["errors"],
                 "signatures": signatures,
+                "validated_images": images,
                 "top_level": [
                     {"id": n["id"], "offset": n["offset"], "size": n["size"], "kind": n["kind"]}
                     for n in scan["nodes"]

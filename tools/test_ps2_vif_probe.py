@@ -27,6 +27,13 @@ class Ps2VifProbeTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "needs 1048576 data bytes"):
             parse_vif_stream(bytes.fromhex("00000050"))
 
+    def test_v3_16_vectors_are_packed_before_word_alignment(self):
+        data = bytes.fromhex("0B800369") + bytes([0x22]) * 18 + b"\x00\x00" + bytes(4)
+        result = parse_vif_stream(data)
+        self.assertEqual(result["command_count"], 2)
+        self.assertEqual(result["unpack_data_bytes"], 20)
+        self.assertEqual(result["command_counts"], {"NOP": 1, "UNPACK_3x16": 1})
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,0 +1,28 @@
+name: Test native format reader
+
+on:
+  push:
+    paths:
+      - 'include/**'
+      - 'tests/**'
+      - 'CMakeLists.txt'
+      - '.github/workflows/test-native.yml'
+  pull_request:
+    paths:
+      - 'include/**'
+      - 'tests/**'
+      - 'CMakeLists.txt'
+      - '.github/workflows/test-native.yml'
+
+jobs:
+  native:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Nfs repository
+        uses: actions/checkout@v4
+      - name: Configure
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+      - name: Build
+        run: cmake --build build --parallel 2
+      - name: Test
+        run: ctest --test-dir build --output-on-failure

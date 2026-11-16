@@ -45,7 +45,7 @@ fn run() -> Result<(), String> {
                         .and_then(|v| v.checked_add(0x88));
                     let header = header_at.and_then(|p| decoded.get(p..p + 48).map(|h| (p, h)));
                     diagnostics.push(format!(
-                        "{{\\"hash\\":\\"{:08X}\\",\\"offset\\":{},\\"compressed\\":{},\\"out_size\\":{},\\"header_from_end\\":{},\\"decoded_len\\":{},\\"hash_occurrences\\":{:?},\\"header_offset\\":{},\\"header_hex\\":\\"{}\\",\\"tail_hex\\":\\"{}\\"}}",
+                        r#"{{"hash":"{:08X}","offset":{},"compressed":{},"out_size":{},"header_from_end":{},"decoded_len":{},"hash_occurrences":{:?},"header_offset":{},"header_hex":"{}","tail_hex":"{}"}}"#,
                         entry.hash.0, entry.abs_offset, entry.size, entry.out_size,
                         entry.header_from_end, decoded.len(), occurrences,
                         header_at.map(|x| x.to_string()).unwrap_or_else(|| "null".into()),
@@ -57,12 +57,12 @@ fn run() -> Result<(), String> {
         }
     }
     let report = format!(
-        "{{\\"input_bytes\\":{},\\"entries\\":{},\\"decoded\\":{},\\"skipped\\":[{}],\\"textures\\":[{}],\\"diagnostics\\":[{}]}}\\n",
+        r#"{{"input_bytes":{},"entries":{},"decoded":{},"skipped":[{}],"textures":[{}],"diagnostics":[{}]}}"#,
         bytes.len(), entries.len(), decoded,
         skipped.iter().map(|s| format!("\\"{}\\"", s.replace('"', "\\\\""))).collect::<Vec<_>>().join(","),
         metadata.join(","),
         diagnostics.join(",")
-    );
+    ) + "\n";
     fs::write(output.join("texture-manifest.json"), report)
         .map_err(|e| format!("write texture manifest: {e}"))?;
     println!("TPK {}: {decoded}/{} textures decoded; {} skipped", input.display(), entries.len(), skipped.len());

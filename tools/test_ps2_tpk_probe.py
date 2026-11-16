@@ -56,6 +56,8 @@ class TpkProbeTests(unittest.TestCase):
         self.assertEqual(report["blob_checks"][0]["blob_magic"], "JDLZ")
         self.assertTrue(report["blob_checks"][0]["index_hash_matches"])
         self.assertEqual(report["blob_checks"][0]["compression_header"]["uncompressed_bytes"], 32)
+        self.assertEqual(report["stream_entries"][0]["descriptor_word_4"], 0x100)
+        self.assertEqual(report["stream_entries"][0]["descriptor_word_5"], 0)
         self.assertEqual(report["errors"], [])
 
     def test_rejects_non_tpk_root(self):

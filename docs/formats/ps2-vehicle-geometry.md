@@ -100,3 +100,10 @@ The PS2 VIF command word is encoded as `CMD | NUM | IMMEDIATE` in successive byt
 These command IDs and formats match the PS2 VIF reference documentation. The byte sequence is consequently a strong VIF-stream signature inside `0x00134A02`, not an arbitrary float or index array. See [PS2Tek: VIF command encoding and UNPACK formats](https://israpps.github.io/ps2tek/#vif-commands) and [PS2SDK VIF codes](https://ps2dev.github.io/ps2sdk/vif__codes_8h.html).
 
 This remains a format identification, not yet a complete vertex interpretation. The VIF stream may unpack data into VU memory using different vector widths and signedness, and the game’s VU microprogram may perform additional transforms before the data becomes renderable geometry. The next step is to parse the complete command stream, validate every payload boundary, and inventory UNPACK formats and counts across representative submeshes. Only then should fields be named as positions, normals, UVs, colors, or indices.
+
+
+### VIF input packing detail established by stream alignment
+
+The first RX7 sample also contains `0x6903800B` (UNPACK V3-16, NUM=3) at stream offset `0x80`, followed by the next valid command `0x6D04801D` at `0x98`. The V3-16 input is 3 components × 16 bits × 3 vectors = 144 bits = 18 bytes; the stream rounds the complete payload to the next 32-bit boundary (20 bytes). It does **not** pad each vector independently to 8 bytes. Treating it as 24 bytes consumed the next command as data and produced a false opcode `0x0F`.
+
+The VIF probe now computes the total bit count for the entire UNPACK batch, then rounds once to a 32-bit boundary. This is tested explicitly with a three-vector V3-16 case. Other formats still require confirmation against the full retail streams. The reference describes the command fields and the packed input layouts: [PS2Tek VIF commands](https://israpps.github.io/ps2tek/#vif-commands) and [VIF UNPACK formats](https://israpps.github.io/ps2tek/#vif-unpack).

@@ -32,7 +32,7 @@ class ZdirProbeTests(unittest.TestCase):
                 })
             rows = probe_catalogue(catalogue, {0: archive}, limit=10)
             self.assertEqual(len(rows), 1)
-            self.assertEqual(rows[0]["header_hex"], "0102030478" * 0 + (b"\x01\x02\x03\x04" + b"x" * 60).hex().upper())
+            self.assertEqual(rows[0]["header_hex"], (b"\x01\x02\x03\x04" + b"x" * 60).hex().upper())
             self.assertEqual(rows[0]["status"], "probed")
 
 

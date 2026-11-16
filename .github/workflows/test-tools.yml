@@ -35,3 +35,7 @@ jobs:
             tools/ps2-vu-replay.cpp \
             -o "$RUNNER_TEMP/ps2-vu-replay"
           test -x "$RUNNER_TEMP/ps2-vu-replay"
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Check PS2 TPK exporter
+        run: cargo check --manifest-path tools/ps2-tpk-exporter/Cargo.toml

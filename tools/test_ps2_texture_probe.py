@@ -96,6 +96,19 @@ class EmbeddedImageHeaderTests(unittest.TestCase):
         self.assertEqual((result[0]['width'], result[0]['height']), (320, 200))
         self.assertEqual(result[0]['components'], 3)
 
+
+    def test_jpeg_signature_with_impossible_dimensions_is_rejected(self):
+        data = bytearray(make_jpeg())
+        # SOF starts after SOI + APP0 marker (6 bytes); width/height are impossible.
+        data[13:15] = (61311).to_bytes(2, "big")
+        data[15:17] = (61247).to_bytes(2, "big")
+        self.assertEqual(inspect_image_headers(bytes(data)), [])
+
+    def test_jpeg_signature_with_invalid_precision_is_rejected(self):
+        data = bytearray(make_jpeg())
+        data[12] = 160
+        self.assertEqual(inspect_image_headers(bytes(data)), [])
+
     def test_false_bmp_signature_is_rejected(self):
         self.assertEqual(inspect_image_headers(b'BM' + bytes(80)), [])
 

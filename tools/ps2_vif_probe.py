@@ -101,9 +101,17 @@ def parse_vif_stream(payload: bytes) -> dict:
                 0x15: "MSCALF", 0x17: "MSCNT",
             }[opcode]
         else:
+            context_begin = max(0, command_start - 32)
+            context_end = min(len(payload), command_start + 32)
+            context_hex = payload[context_begin:context_end].hex(" ")
+            previous = [
+                f"{item['offset']:04X}:{item['word']}:{item['label']}"
+                for item in commands[-8:]
+            ]
             raise ValueError(
                 f"unknown VIF opcode 0x{opcode:02X} at 0x{command_start:X} "
-                f"(word 0x{word:08X})"
+                f"(word 0x{word:08X}); previous={previous}; "
+                f"context[0x{context_begin:X}:0x{context_end:X}]={context_hex}"
             )
 
         if data_bytes > len(payload) - pos:
